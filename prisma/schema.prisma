@@ -1,0 +1,183 @@
+// Al Nokhba Educational Center — attendance, billing & parent notifications
+//
+//   Student 1 ── N Enrollment (one per subject/group)
+//   Enrollment 1 ── N QrCard (exactly one ACTIVE at a time; old ones REVOKED)
+//   Enrollment 1 ── N Payment (one per billing month)
+//   Enrollment 1 ── N Attendance (one per day)
+//
+// A card therefore identifies BOTH the student and the subject being attended.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url       = env("DATABASE_URL") // pooled connection (app runtime)
+  directUrl = env("DIRECT_URL") // direct connection (migrations)
+}
+
+/// A class/session group, e.g. "الصف الثالث الثانوي - فيزياء"
+model Group {
+  id               String       @id @default(cuid())
+  name             String       @unique
+  subject          String
+  grade            String
+  monthlyFee       Int          @default(0) // EGP, whole pounds
+  sessionsPerMonth Int          @default(4)
+  active           Boolean      @default(true)
+  enrollments      Enrollment[]
+  attendance       Attendance[]
+  createdAt        DateTime     @default(now())
+}
+
+/// Shared personal details — every card of the student points back here.
+model Student {
+  id             String         @id @default(cuid())
+  fullName       String
+  phone          String
+  parentWhatsapp String
+  active         Boolean        @default(true)
+  enrollments    Enrollment[]
+  attendance     Attendance[]
+  notifications  Notification[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([fullName])
+  @@index([phone])
+}
+
+/// Student ⟷ subject/group. Dropping a subject sets active=false (history is kept).
+model Enrollment {
+  id         String       @id @default(cuid())
+  studentId  String
+  student    Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  groupId    String
+  group      Group        @relation(fields: [groupId], references: [id])
+  active     Boolean      @default(true)
+  cards      QrCard[]
+  payments   Payment[]
+  attendance Attendance[]
+  createdAt  DateTime     @default(now())
+
+  @@unique([studentId, groupId])
+  @@index([groupId])
+}
+
+enum CardStatus {
+  ACTIVE // accepted by the scanner
+  REVOKED // lost/replaced/dropped subject — rejected forever
+}
+
+/// A physical pre-printed card. `code` is the exact QR payload (e.g. NOH-1001).
+/// One ACTIVE card per enrollment is enforced in lib/cards.ts inside a transaction.
+model QrCard {
+  id           String     @id @default(cuid())
+  code         String     @unique
+  status       CardStatus @default(ACTIVE)
+  enrollmentId String
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  assignedAt   DateTime   @default(now())
+  revokedAt    DateTime?
+
+  @@index([enrollmentId, status])
+}
+
+enum PaymentStatus {
+  PAID
+  UNPAID
+  PENDING
+}
+
+/// One row per enrollment (subject) per billing month "YYYY-MM". Missing row == UNPAID.
+model Payment {
+  id           String        @id @default(cuid())
+  enrollmentId String
+  enrollment   Enrollment    @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  month        String
+  amount       Int
+  status       PaymentStatus @default(UNPAID)
+  paidAt       DateTime?
+  updatedAt    DateTime      @updatedAt
+
+  @@unique([enrollmentId, month])
+  @@index([month, status])
+}
+
+enum AttendanceMethod {
+  SCAN
+  MANUAL
+}
+
+model Attendance {
+  id           String           @id @default(cuid())
+  /// Generated on the scanning device — makes online retries and offline sync idempotent.
+  clientId     String?          @unique
+  enrollmentId String
+  enrollment   Enrollment       @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  // Denormalized for fast reporting
+  studentId    String
+  student      Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  groupId      String
+  group        Group            @relation(fields: [groupId], references: [id])
+  date         String // local date "YYYY-MM-DD" (APP_TIMEZONE) derived from scannedAt
+  month        String // local month "YYYY-MM"
+  scannedAt    DateTime         @default(now()) // the moment of the scan — preserved for offline scans
+  syncedAt     DateTime         @default(now()) // when the server received it
+  method       AttendanceMethod @default(SCAN)
+  offline      Boolean          @default(false) // recorded while the device was offline
+  cardCode     String?
+
+  notifications Notification[]
+
+  // One attendance per subject per day (re-scans / re-syncs are idempotent)
+  @@unique([enrollmentId, date])
+  @@index([date])
+  @@index([month, groupId])
+  @@index([studentId])
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+  MANUAL // opened via wa.me link by the admin
+}
+
+model Notification {
+  id           String             @id @default(cuid())
+  studentId    String
+  student      Student            @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  attendanceId String?
+  attendance   Attendance?        @relation(fields: [attendanceId], references: [id], onDelete: SetNull)
+  phone        String
+  message      String
+  provider     String
+  status       NotificationStatus @default(QUEUED)
+  error        String?
+  createdAt    DateTime           @default(now())
+
+  @@index([createdAt])
+}
+
+enum WhatsAppProvider {
+  NONE // manual wa.me links only
+  GREEN_API
+  ULTRAMSG
+  TWILIO
+}
+
+/// Singleton row (id = 1)
+model Settings {
+  id                 Int              @id @default(1)
+  centerName         String           @default("سنتر النخبة التعليمي")
+  provider           WhatsAppProvider @default(NONE)
+  autoSend           Boolean          @default(false)
+  apiUrl             String?
+  instanceId         String?
+  apiToken           String?
+  senderNumber       String?
+  attendanceTemplate String           @default("أهلاً بك، تم تسجيل حضور الطالب/ة {student_name} لحصة {subject} اليوم في سنتر النخبة التعليمي الساعة {time}.")
+  unpaidNotice       String           @default("تنبيه: لم يتم سداد اشتراك {subject} لشهر {month} للطالب/ة {student_name}. برجاء السداد في أقرب وقت.")
+  updatedAt          DateTime         @updatedAt
+}

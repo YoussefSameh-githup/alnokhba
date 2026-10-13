@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-tap-highlight-color: transparent; }
+  body { @apply bg-surface text-ink antialiased; }
+  /* Numbers, phones and QR codes stay LTR inside RTL text */
+  .ltr { direction: ltr; unicode-bidi: isolate; }
+  input[type="tel"], input[type="date"], .font-mono { direction: ltr; text-align: end; }
+  :focus-visible { @apply outline-none ring-2 ring-brand/60 ring-offset-2 ring-offset-surface; }
+}
+
+@layer components {
+  .card { @apply rounded-2xl border border-surface-line bg-surface-card shadow-card; }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold
+           transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary { @apply btn bg-brand text-white hover:bg-brand-600; }
+  .btn-dark { @apply btn bg-ink text-white hover:bg-ink-soft; }
+  .btn-ghost { @apply btn border border-surface-line bg-white text-ink hover:bg-surface; }
+  .btn-success { @apply btn bg-paid text-white hover:brightness-110; }
+  .input {
+    @apply w-full rounded-xl border border-surface-line bg-white px-3.5 py-2.5 text-sm text-ink
+           placeholder:text-ink-muted/70 focus:border-brand focus:shadow-glow focus:outline-none;
+  }
+  .label { @apply mb-1.5 block text-sm font-semibold text-ink-soft; }
+  .th { @apply px-4 py-3 text-start text-xs font-bold text-ink-muted; }
+  .td { @apply px-4 py-3 text-sm; }
+}
+
+/* html5-qrcode injects its own video + shaded box; we draw our own branded overlay */
+[id^="qr-"] video { object-fit: cover; width: 100% !important; height: 100% !important; }
+#qr-shaded-region { display: none !important; }
