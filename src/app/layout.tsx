@@ -1,13 +1,18 @@
 import type { Metadata, Viewport } from "next";
-import { Cairo } from "next/font/google";
-import { AppShell } from "@/components/AppShell";
+import { IBM_Plex_Sans_Arabic } from "next/font/google";
+import { AppShell } from "@/components/shell/AppShell";
 import { ToastProvider } from "@/components/ui/Toast";
 import "./globals.css";
 
-const cairo = Cairo({ subsets: ["arabic", "latin"], variable: "--font-cairo", display: "swap" });
+const plex = IBM_Plex_Sans_Arabic({
+  subsets: ["arabic", "latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-sans",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: { default: "سنتر النخبة التعليمي", template: "%s | سنتر النخبة" },
+  title: { default: "سنتر النخبة التعليمي", template: "%s · سنتر النخبة" },
   description: "نظام الحضور والاشتراكات وإشعارات أولياء الأمور — سنتر النخبة التعليمي",
   manifest: "/manifest.webmanifest",
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
@@ -15,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#E52328",
+  themeColor: "#0F172A",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
@@ -23,7 +28,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ar" dir="rtl" className={cairo.variable}>
+    <html lang="ar" dir="rtl" className={plex.variable}>
       <body className="font-sans">
         <ToastProvider>
           <AppShell>{children}</AppShell>

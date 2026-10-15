@@ -1,9 +1,13 @@
 import type { Config } from "tailwindcss";
 
 /**
- * Al Nokhba Educational Center brand theme.
- * RTL: prefer logical utilities (ms-/me-/ps-/pe-/start-/end-/text-start) so
- * layouts mirror automatically with <html dir="rtl">.
+ * Al Nokhba design system.
+ *  brand    — premium crimson (#DC2626 / #991B1B)
+ *  ink      — deep charcoal text & dark surfaces (#0F172A / #020617)
+ *  surface  — slate off-white canvas, white cards, hairline borders
+ *  paid / unpaid / pending — status semantics (always paired with text, never color alone)
+ *
+ * RTL: use logical utilities (ms-/me-/ps-/pe-/start-/end-/text-start) so layouts mirror with dir="rtl".
  */
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
@@ -11,47 +15,59 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          DEFAULT: "#E52328",
+          DEFAULT: "#DC2626",
           50: "#FEF2F2",
-          100: "#FDE3E4",
-          200: "#FBCBCC",
-          300: "#F7A3A6",
-          400: "#F06B70",
-          500: "#E52328",
-          600: "#C8171C",
-          700: "#A81318",
-          800: "#8B1518",
-          900: "#73171A",
+          100: "#FEE2E2",
+          200: "#FECACA",
+          300: "#FCA5A5",
+          400: "#F87171",
+          500: "#EF4444",
+          600: "#DC2626",
+          700: "#B91C1C",
+          800: "#991B1B",
+          900: "#7F1D1D",
         },
         ink: {
-          DEFAULT: "#1A1A1A",
-          soft: "#3D3D3D",
-          muted: "#6B7280",
+          DEFAULT: "#0F172A",
+          deep: "#020617",
+          soft: "#334155",
+          muted: "#64748B",
+          faint: "#94A3B8",
         },
         surface: {
-          DEFAULT: "#F8F9FA",
+          DEFAULT: "#F8FAFC",
           card: "#FFFFFF",
-          line: "#E9ECEF",
+          subtle: "#F1F5F9",
+          line: "#E2E8F0",
+          strong: "#CBD5E1",
         },
-        paid: { DEFAULT: "#059669", soft: "#D1FAE5" },     // emerald
-        unpaid: { DEFAULT: "#E52328", soft: "#FDE3E4" },   // crimson
-        pending: { DEFAULT: "#D97706", soft: "#FEF3C7" },  // amber
+        paid: { DEFAULT: "#059669", soft: "#ECFDF5", line: "#A7F3D0" },
+        unpaid: { DEFAULT: "#DC2626", soft: "#FEF2F2", line: "#FECACA" },
+        pending: { DEFAULT: "#D97706", soft: "#FFFBEB", line: "#FDE68A" },
       },
       fontFamily: {
-        sans: ["var(--font-cairo)", "system-ui", "sans-serif"],
+        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],
       },
-      borderRadius: { xl: "0.875rem", "2xl": "1.25rem" },
+      fontSize: {
+        "2xs": ["0.6875rem", { lineHeight: "1rem" }],
+      },
       boxShadow: {
-        card: "0 1px 2px rgba(26,26,26,0.04), 0 4px 16px rgba(26,26,26,0.06)",
-        glow: "0 0 0 4px rgba(229,35,40,0.15)",
+        xs: "0 1px 2px 0 rgb(15 23 42 / 0.04)",
+        card: "0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.03)",
+        pop: "0 10px 38px -10px rgb(2 6 23 / 0.25), 0 10px 20px -15px rgb(2 6 23 / 0.15)",
+        ring: "0 0 0 4px rgb(220 38 38 / 0.12)",
       },
       keyframes: {
-        scanline: {
-          "0%": { top: "3%" },
-          "100%": { top: "96%" },
-        },
+        scanline: { "0%": { top: "4%" }, "100%": { top: "94%" } },
+        "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },
+        "slide-up": { from: { opacity: "0", transform: "translateY(8px)" }, to: { opacity: "1", transform: "translateY(0)" } },
       },
-      animation: { scanline: "scanline 1.6s ease-in-out infinite alternate" },
+      animation: {
+        scanline: "scanline 1.6s ease-in-out infinite alternate",
+        "fade-in": "fade-in 150ms ease-out",
+        "slide-up": "slide-up 180ms cubic-bezier(0.16, 1, 0.3, 1)",
+      },
     },
   },
   plugins: [],

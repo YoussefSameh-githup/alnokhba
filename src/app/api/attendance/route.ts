@@ -13,7 +13,7 @@ export const GET = handle(async (req: Request) => {
   const page = Math.max(1, Number(sp.get("page")) || 1);
   const take = 50;
   const where = buildAttendanceWhere(sp);
-  const [rows, total] = await Promise.all([
+  const [rows, total, students, manual, offline] = await Promise.all([
     prisma.attendance.findMany({
       where,
       orderBy: { scannedAt: "desc" },
@@ -26,9 +26,14 @@ export const GET = handle(async (req: Request) => {
       },
     }),
     prisma.attendance.count({ where }),
+    // range-wide summary (not just this page)
+    prisma.attendance.groupBy({ by: ["studentId"], where }).then((r) => r.length),
+    prisma.attendance.count({ where: { ...where, method: "MANUAL" } }),
+    prisma.attendance.count({ where: { ...where, offline: true } }),
   ]);
   return NextResponse.json({
     total,
+    summary: { students, manual, offline },
     page,
     pages: Math.max(1, Math.ceil(total / take)),
     rows: rows.map((r) => ({

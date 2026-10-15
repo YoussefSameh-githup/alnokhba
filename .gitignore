@@ -3,3 +3,9 @@ node_modules
 .env
 *.tsbuildinfo
 next-env.d.ts
+
+# any local env / secrets file (e.g. .env.local, .env.production, env.txt)
+.env*
+!.env.example
+*env*.txt
+.claude/

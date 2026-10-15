@@ -10,8 +10,13 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/scan",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#F8F9FA",
-    theme_color: "#E52328",
+    background_color: "#F8FAFC",
+    theme_color: "#0F172A",
+    shortcuts: [
+      { name: "مركز المسح", url: "/scan" },
+      { name: "تسجيل طالب جديد", url: "/students?new=1" },
+      { name: "المدفوعات", url: "/payments" },
+    ],
     icons: [{ src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" }],
   };
 }

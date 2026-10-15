@@ -1,6 +1,6 @@
 # سنتر النخبة التعليمي — Attendance, Billing & Parent Notifications
 
-Next.js 15 (App Router) · TypeScript · Tailwind CSS (RTL, Arabic-first) · Prisma + PostgreSQL · html5-qrcode · Framer Motion · lucide-react · Offline-first PWA (Service Worker + IndexedDB)
+Next.js 15 (App Router) · TypeScript · Tailwind CSS (RTL, Arabic-first) · Prisma + PostgreSQL · html5-qrcode · exceljs · lucide-react · Offline-first PWA (Service Worker + IndexedDB)
 
 ## Quick start
 
@@ -66,41 +66,49 @@ That's why the scanner has no session picker.
 The status pill at the top of every screen shows the state: `● متصل` / `● جاري المزامنة (n)` /
 `● غير متصل (n مسح في الانتظار)`. Tap it to sync now.
 
+## Screens
+
+| Route | Purpose |
+|---|---|
+| `/` | **Dashboard**: enrolled students, today's attendance rate, unpaid subjects, sync status, 7-day trend, per-subject attendance, live scan feed |
+| `/scan` | **Scan Hub**: camera + USB/Bluetooth reader (works without focusing anything) + inline "forgot card" search; big green/amber/red result with payment & parent-notification status; full-screen mode; works offline |
+| `/students` | Directory: search by name, phone, card code **or subject**; per-subject card · attendance · payment (click to toggle); one-step enrollment modal; Excel export |
+| `/groups` | Subjects & groups: fees, sessions/month, enrolled counts, archive/restore |
+| `/payments` | Monthly billing ledger per subject: inline status, bulk "mark paid", month picker, Excel export |
+| `/reports` | Attendance log with date presets, subject/student filters, Excel export |
+| `/settings` | WhatsApp gateway + message templates with live preview |
+
+Keyboard: **Ctrl/⌘ K** opens global search (students & pages, works offline from the device snapshot). On the scan hub: **/** focuses the search, **Esc** = next scan.
+
 ## Folder structure
 
 ```
 nokhba-attendance/
-├─ prisma/schema.prisma · prisma/seed.ts
-├─ public/
-│  ├─ sw.js                       # service worker: shell cache + Background Sync
-│  └─ icon.svg
+├─ prisma/schema.prisma · migrations/ · seed.ts
+├─ public/sw.js · icon.svg            # service worker: shell cache + Background Sync
 ├─ src/
-│  ├─ middleware.ts               # HTTP Basic admin gate (ADMIN_PASSWORD)
+│  ├─ middleware.ts                   # HTTP Basic admin gate (ADMIN_PASSWORD)
 │  ├─ app/
-│  │  ├─ scan/page.tsx            # scanner (camera + USB reader), offline-aware result card
-│  │  ├─ students/page.tsx        # one row per student, one chip per subject/card
-│  │  ├─ reports/page.tsx · settings/page.tsx
+│  │  ├─ page.tsx                     # dashboard
+│  │  ├─ scan/ · students/ · groups/ · payments/ · reports/ · settings/
 │  │  └─ api/
-│  │     ├─ scan/                       POST card scan or manual attendance (idempotent by clientId)
-│  │     ├─ attendance/sync/            POST bulk offline sync (≤500/batch)
-│  │     ├─ offline/snapshot/           GET  data the scanner needs offline
-│  │     ├─ health/                     GET  server + DB probe
-│  │     ├─ students/ · students/[id]/  GET · POST · PUT (full desired state, atomic) · DELETE
-│  │     ├─ enrollments/[id]/card/      POST replace ONE subject's lost card
-│  │     ├─ enrollments/[id]/payment/   POST payment status for ONE subject
-│  │     ├─ attendance/ · attendance/export/ · stats/ · groups/ · cards/check/ · settings/ · whatsapp/
+│  │     ├─ scan/                     POST card scan / manual attendance (idempotent by clientId)
+│  │     ├─ attendance/ · /sync · /export      log (+range summary) · bulk offline sync · .xlsx
+│  │     ├─ students/ · /[id] · /export        directory · full-state PUT · .xlsx (2 sheets)
+│  │     ├─ enrollments/[id]/card · /payment   replace ONE subject's card · set its payment
+│  │     ├─ payments/ · /export                monthly ledger + totals · .xlsx
+│  │     ├─ dashboard/ · stats/ · groups/ · cards/check/ · offline/snapshot/ · health/ · settings/ · whatsapp/
 │  ├─ components/
-│  │  ├─ ConnectionStatus.tsx     # 🟢/🔴 pill + SW registration + sync toasts
-│  │  ├─ StudentFormModal.tsx     # details + N subject rows (group · card · payment)
-│  │  ├─ QrBindField.tsx · RebindCardModal.tsx · ScanResultCard.tsx · ManualAttendanceDialog.tsx · QrScanner.tsx
+│  │  ├─ shell/                       # AppShell (sidebar, top bar, mobile tab bar), CommandPalette, SyncStatus, nav
+│  │  ├─ students/                    # StudentFormModal (one-step enrollment), QrBindField, RebindCardModal
+│  │  ├─ ui/                          # primitives (PageHeader, StatCard, Segmented, SearchInput…), Modal, Toast, Badge, ConfirmDialog
+│  │  └─ QrScanner · ScanResultCard · QuickCheckIn
 │  └─ lib/
-│     ├─ offline/db.ts            # IndexedDB wrapper (stores: enrollments, queue, meta)
-│     ├─ offline/sync.ts          # Sync Manager + useSyncState() hook
-│     ├─ offline/scan.ts          # performScan(): online → offline fallback
-│     ├─ scan-types.ts            # shapes shared by server & client
-│     ├─ attendance.ts            # markAttendance / resolveCard / resolveScannedAt
-│     ├─ students.ts              # saveStudent(): one-transaction diff of subjects/cards/payments
-│     └─ cards.ts · whatsapp.ts · dates.ts · phone.ts · template.ts · validators.ts
+│     ├─ offline/db.ts · sync.ts · scan.ts    # IndexedDB, Sync Manager, offline-first scan
+│     ├─ useBarcodeListener.ts        # global USB/Bluetooth reader detection
+│     ├─ xlsx.ts                      # RTL .xlsx builder (exceljs)
+│     ├─ student-query.ts · attendance-query.ts   # shared filters for lists & exports
+│     └─ attendance.ts · students.ts · cards.ts · whatsapp.ts · dates.ts · phone.ts · validators.ts …
 ```
 
 ## Deploying

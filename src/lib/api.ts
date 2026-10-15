@@ -81,7 +81,4 @@ export function useDebounced<T>(value: T, ms = 300): T {
   return v;
 }
 
-/** Shows Egyptian numbers in local format: 201012345678 → 01012345678 */
-export function displayPhone(p: string): string {
-  return p.startsWith("20") && p.length === 12 ? "0" + p.slice(2) : p;
-}
+export { localPhone as displayPhone } from "./phone";

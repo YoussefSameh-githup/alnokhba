@@ -8,10 +8,10 @@
  *    The page-side engine (src/lib/offline/sync.ts) does the same while open;
  *    the server is idempotent, so both running at once is harmless.
  */
-const VERSION = "v2";
+const VERSION = "v3";
 const SHELL_CACHE = `nokhba-shell-${VERSION}`;
 const ASSET_CACHE = `nokhba-assets-${VERSION}`;
-const SHELL_PAGES = ["/scan", "/students", "/reports", "/settings"];
+const SHELL_PAGES = ["/", "/scan", "/students", "/groups", "/payments", "/reports", "/settings"];
 const SHELL_FILES = ["/manifest.webmanifest", "/icon.svg"];
 
 // Must match src/lib/offline/db.ts

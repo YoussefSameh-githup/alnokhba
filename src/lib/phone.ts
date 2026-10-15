@@ -21,3 +21,8 @@ export function isValidEgMobile(raw: string): boolean {
 export function waLink(phone: string, message: string): string {
   return `https://wa.me/${normalizePhone(phone)}?text=${encodeURIComponent(message)}`;
 }
+
+/** Display Egyptian numbers in local format: 201012345678 → 01012345678 */
+export function localPhone(p: string): string {
+  return p.startsWith("20") && p.length === 12 ? "0" + p.slice(2) : p;
+}

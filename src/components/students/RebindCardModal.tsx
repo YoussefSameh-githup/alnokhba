@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCcw, Loader2, ArrowLeft } from "lucide-react";
-import { Modal } from "./ui/Modal";
+import { Modal } from "@/components/ui/Modal";
+import { useToast } from "@/components/ui/Toast";
 import { QrBindField, type CardCheck } from "./QrBindField";
-import { useToast } from "./ui/Toast";
 import { api, type EnrollmentRow, type StudentRow } from "@/lib/api";
 
 export type RebindTarget = { student: StudentRow; enrollment: EnrollmentRow };
@@ -45,8 +45,9 @@ export function RebindCardModal({ target, onClose, onSaved }: { target: RebindTa
       open={Boolean(target)}
       onClose={onClose}
       size="sm"
-      title={old ? "استبدال كارت مادة" : "ربط كارت بمادة"}
-      icon={<RefreshCcw className="h-5 w-5" />}
+      title={old ? "استبدال كارت مفقود" : "ربط كارت بالمادة"}
+      description={target ? `${target.student.fullName} · ${target.enrollment.group.subject}` : undefined}
+      icon={<RefreshCcw className="h-4 w-4" />}
       footer={
         <>
           <button className="btn-ghost" onClick={onClose}>إلغاء</button>
@@ -59,21 +60,16 @@ export function RebindCardModal({ target, onClose, onSaved }: { target: RebindTa
     >
       {target && (
         <div className="space-y-4">
-          <div className="rounded-xl bg-surface p-4">
-            <p className="font-black">{target.student.fullName}</p>
-            <p className="text-sm font-bold text-brand">{target.enrollment.group.subject}</p>
-            <p className="text-xs text-ink-muted">{target.enrollment.group.name}</p>
-            {old && (
-              <p className="mt-3 flex items-center gap-2 text-sm font-bold">
-                <span className="rounded-lg bg-unpaid-soft px-2 py-1 font-mono text-unpaid line-through ltr">{old}</span>
-                <ArrowLeft className="h-4 w-4 text-ink-muted" />
-                <span className="rounded-lg bg-paid-soft px-2 py-1 font-mono text-paid ltr">{check.state === "ok" ? check.code : "؟"}</span>
-              </p>
-            )}
-          </div>
-          <QrBindField value={code} onChange={setCode} onStatus={onStatus} autoOpenCamera label="امسح الكارت الجديد لهذه المادة" id="rebind-code" />
-          {old && <p className="text-xs text-ink-muted">سيتم إلغاء الكارت القديم فوراً. كروت المواد الأخرى لن تتأثر.</p>}
-          {error && <p className="rounded-xl bg-unpaid-soft px-4 py-3 text-sm font-bold text-unpaid">{error}</p>}
+          {old && (
+            <div className="flex items-center justify-center gap-3 rounded-lg bg-surface-subtle px-4 py-3 text-sm font-semibold">
+              <span className="rounded-md border border-unpaid-line bg-unpaid-soft px-2 py-1 font-mono text-unpaid line-through ltr">{old}</span>
+              <ArrowLeft className="h-4 w-4 text-ink-faint" />
+              <span className="rounded-md border border-paid-line bg-paid-soft px-2 py-1 font-mono text-paid ltr">{check.state === "ok" ? check.code : "؟"}</span>
+            </div>
+          )}
+          <QrBindField value={code} onChange={setCode} onStatus={onStatus} onEnter={confirm} autoOpenCamera label="الكارت الجديد" id="rebind-code" />
+          <p className="text-xs text-ink-muted">{old ? "الكارت القديم يُلغى فوراً — حتى على الأجهزة غير المتصلة. كروت المواد الأخرى لا تتأثر." : "امسح الكارت بالكاميرا أو بقارئ الباركود."}</p>
+          {error && <p className="rounded-lg border border-unpaid-line bg-unpaid-soft px-4 py-3 text-sm font-medium text-unpaid">{error}</p>}
         </div>
       )}
     </Modal>

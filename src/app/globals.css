@@ -4,32 +4,76 @@
 
 @layer base {
   html { -webkit-tap-highlight-color: transparent; }
-  body { @apply bg-surface text-ink antialiased; }
-  /* Numbers, phones and QR codes stay LTR inside RTL text */
+  body {
+    @apply bg-surface text-ink antialiased;
+    font-feature-settings: "tnum" 1; /* aligned numbers in tables & counters */
+  }
+  ::selection { @apply bg-brand-100 text-brand-900; }
+  /* Numbers, phones and card codes stay LTR inside RTL text */
   .ltr { direction: ltr; unicode-bidi: isolate; }
-  input[type="tel"], input[type="date"], .font-mono { direction: ltr; text-align: end; }
-  :focus-visible { @apply outline-none ring-2 ring-brand/60 ring-offset-2 ring-offset-surface; }
+  input[type="tel"], input[type="date"], input[type="month"], .font-mono { direction: ltr; text-align: end; }
+  :focus-visible { @apply outline-none ring-2 ring-brand/50 ring-offset-2 ring-offset-white; }
+  [hidden] { display: none !important; }
 }
 
 @layer components {
-  .card { @apply rounded-2xl border border-surface-line bg-surface-card shadow-card; }
+  /* Surfaces */
+  .card { @apply rounded-xl border border-surface-line bg-surface-card shadow-card; }
+  .card-header { @apply flex items-center justify-between gap-3 border-b border-surface-line px-5 py-3.5; }
+  .card-title { @apply text-sm font-semibold text-ink; }
+
+  /* Buttons */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold
-           transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex h-10 select-none items-center justify-center gap-2 whitespace-nowrap rounded-lg px-4 text-sm font-semibold
+           transition-[background-color,border-color,color,box-shadow,transform] duration-150 active:scale-[0.98]
+           disabled:pointer-events-none disabled:opacity-50;
   }
-  .btn-primary { @apply btn bg-brand text-white hover:bg-brand-600; }
-  .btn-dark { @apply btn bg-ink text-white hover:bg-ink-soft; }
-  .btn-ghost { @apply btn border border-surface-line bg-white text-ink hover:bg-surface; }
-  .btn-success { @apply btn bg-paid text-white hover:brightness-110; }
+  .btn-primary { @apply btn bg-brand text-white shadow-xs hover:bg-brand-700; }
+  .btn-dark { @apply btn bg-ink text-white shadow-xs hover:bg-ink-soft; }
+  .btn-secondary { @apply btn border border-surface-line bg-white text-ink shadow-xs hover:border-surface-strong hover:bg-surface; }
+  .btn-ghost { @apply btn text-ink-soft hover:bg-surface-subtle hover:text-ink; }
+  .btn-success { @apply btn bg-paid text-white shadow-xs hover:brightness-110; }
+  /* Size modifiers come AFTER the variants so they win the cascade (variants re-apply the base size) */
+  .btn-sm { @apply h-8 gap-1.5 rounded-md px-3 text-xs; }
+  .btn-lg { @apply h-12 rounded-xl px-5 text-base; }
+  .btn-icon { @apply h-9 w-9 px-0; }
+
+  /* Forms */
   .input {
-    @apply w-full rounded-xl border border-surface-line bg-white px-3.5 py-2.5 text-sm text-ink
-           placeholder:text-ink-muted/70 focus:border-brand focus:shadow-glow focus:outline-none;
+    @apply h-10 w-full rounded-lg border border-surface-line bg-white px-3 text-sm text-ink shadow-xs transition
+           placeholder:text-ink-faint hover:border-surface-strong focus:border-brand focus:shadow-ring focus:outline-none
+           disabled:cursor-not-allowed disabled:bg-surface-subtle disabled:text-ink-muted;
   }
-  .label { @apply mb-1.5 block text-sm font-semibold text-ink-soft; }
-  .th { @apply px-4 py-3 text-start text-xs font-bold text-ink-muted; }
-  .td { @apply px-4 py-3 text-sm; }
+  .input-lg { @apply h-12 rounded-xl text-base; }
+  .label { @apply mb-1.5 block text-xs font-semibold text-ink-soft; }
+  .hint { @apply mt-1.5 text-xs text-ink-muted; }
+  .error-text { @apply mt-1.5 text-xs font-medium text-unpaid; }
+
+  /* Tables */
+  .table { @apply w-full border-separate border-spacing-0 text-sm; }
+  .th { @apply sticky top-0 z-10 border-b border-surface-line bg-surface/95 px-4 py-2.5 text-start text-xs font-semibold text-ink-muted backdrop-blur; }
+  .td { @apply border-b border-surface-line px-4 py-3 align-middle; }
+  .tr-hover { @apply transition-colors hover:bg-surface/70; }
+
+  /* Misc */
+  .kbd { @apply inline-flex h-5 min-w-5 items-center justify-center rounded border border-surface-line bg-white px-1 font-mono text-2xs font-medium text-ink-muted shadow-xs; }
+  .chip { @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold; }
+  .skeleton { @apply relative overflow-hidden rounded-md bg-surface-subtle; }
+  .skeleton::after {
+    content: "";
+    @apply absolute inset-0 -translate-x-full;
+    background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.6), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: theme("colors.surface.strong") transparent; }
 }
 
-/* html5-qrcode injects its own video + shaded box; we draw our own branded overlay */
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+
+/* html5-qrcode injects its own video + shaded box; we draw our own overlay */
 [id^="qr-"] video { object-fit: cover; width: 100% !important; height: 100% !important; }
 #qr-shaded-region { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

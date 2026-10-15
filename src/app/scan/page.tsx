@@ -1,50 +1,58 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { Keyboard, UserCheck, Users, ScanLine, Timer, Loader2, CloudOff } from "lucide-react";
-import { PageHeader } from "@/components/AppShell";
+import { Maximize2, Minimize2, Timer, Usb, Users, CloudOff, ScanLine, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from "lucide-react";
+import clsx from "clsx";
 import { QrScanner } from "@/components/QrScanner";
 import { ScanResultCard } from "@/components/ScanResultCard";
-import { ManualAttendanceDialog } from "@/components/ManualAttendanceDialog";
-import { StudentFormModal } from "@/components/StudentFormModal";
+import { QuickCheckIn, type QuickCheckInHandle } from "@/components/QuickCheckIn";
+import { StudentFormModal } from "@/components/students/StudentFormModal";
 import { useToast } from "@/components/ui/Toast";
 import { api, useGroups, type ScanOutcome } from "@/lib/api";
 import { performScan } from "@/lib/offline/scan";
 import { useSyncState, syncEngine, type SnapshotMeta } from "@/lib/offline/sync";
 import { idbGet } from "@/lib/offline/db";
+import { useBarcodeListener } from "@/lib/useBarcodeListener";
 import { feedback } from "@/lib/feedback";
 
 const LS_AUTONEXT = "nokhba.scan.autonext";
 const AUTO_NEXT_MS = 4000;
+const LOG_SIZE = 8;
+
+type LogEntry = { key: number; kind: "PAID" | "UNPAID" | "PENDING" | "error" | "unverified"; title: string; sub: string; time: string; offline: boolean; repeat: boolean };
 
 /**
- * Each pre-printed card = one student + one subject, so there is no session
- * picker: the card itself says which subject is being attended.
+ * Scan Hub — the daily counter screen.
+ * Inputs: camera, USB/Bluetooth reader (global, no focus needed), quick search.
+ * Each card = one student + one subject, so there is no session picker.
  * Works offline: decisions fall back to the on-device snapshot and scans queue.
  */
-export default function ScanPage() {
+export default function ScanHubPage() {
   const toast = useToast();
   const sync = useSyncState();
   const { groups } = useGroups();
   const [outcome, setOutcome] = useState<ScanOutcome | null>(null);
   const [outcomeKey, setOutcomeKey] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [manualOpen, setManualOpen] = useState(false);
-  const [manualBusyId, setManualBusyId] = useState<string | null>(null);
+  const [busyEnrollment, setBusyEnrollment] = useState<string | null>(null);
   const [registerCode, setRegisterCode] = useState<string | null>(null);
-  const [typed, setTyped] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [autoNext, setAutoNext] = useState(false);
   const [presentToday, setPresentToday] = useState<number | null>(null);
   const [hasGateway, setHasGateway] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [log, setLog] = useState<LogEntry[]>([]);
   const inFlight = useRef(false);
-  const codeInput = useRef<HTMLInputElement>(null);
   const autoTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const hubRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<QuickCheckInHandle>(null);
 
   useEffect(() => {
     setAutoNext(localStorage.getItem(LS_AUTONEXT) === "1");
+  }, []);
+
+  useEffect(() => {
     // Gateway info comes from the cached snapshot → known even offline
     idbGet<SnapshotMeta>("meta", "snapshot")
       .then((m) => m && setHasGateway(m.settings.provider !== "NONE"))
@@ -56,20 +64,17 @@ export default function ScanPage() {
     api<{ presentToday: number }>("/api/stats").then((s) => setPresentToday(s.presentToday)).catch(() => {});
   }, [sync.online, sync.lastSyncAt]);
 
+  useEffect(() => {
+    const onFs = () => setFullscreen(document.fullscreenElement === hubRef.current);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
   const next = useCallback(() => {
     clearTimeout(autoTimer.current);
     setOutcome(null);
     setSent(false);
-    setTyped("");
-    codeInput.current?.focus();
   }, []);
-
-  // Esc = next scan. (No autofocus on result buttons: a USB reader's trailing Enter must never dismiss a result.)
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !manualOpen && registerCode === null && next();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [next, manualOpen, registerCode]);
 
   const show = useCallback(
     (o: ScanOutcome) => {
@@ -77,6 +82,7 @@ export default function ScanPage() {
       setOutcomeKey((k) => k + 1);
       setSent(false);
       clearTimeout(autoTimer.current);
+      setLog((l) => [toLog(o), ...l].slice(0, LOG_SIZE));
       if (o.kind === "result") {
         feedback(o.data.payment.status === "PAID" ? "ok" : "warn");
         if (!o.data.alreadyMarked) setPresentToday((n) => (n ?? 0) + 1);
@@ -105,14 +111,33 @@ export default function ScanPage() {
     [show],
   );
 
-  const submitCode = useCallback((raw: string) => raw.trim() && run({ code: raw }, "SCAN"), [run]);
+  const scanCode = useCallback((raw: string) => {
+    if (raw.trim()) void run({ code: raw }, "SCAN");
+  }, [run]);
 
-  async function manualMark(enrollmentId: string) {
-    setManualBusyId(enrollmentId);
+  const checkIn = useCallback(async (enrollmentId: string) => {
+    setBusyEnrollment(enrollmentId);
     await run({ enrollmentId }, "MANUAL");
-    setManualBusyId(null);
-    setManualOpen(false);
-  }
+    setBusyEnrollment(null);
+  }, [run]);
+
+  // USB / Bluetooth reader works anywhere on the page — no need to click into a field
+  useBarcodeListener(scanCode, { enabled: registerCode === null });
+
+  // Esc = next scan;  "/" = jump to the quick search
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (registerCode !== null) return;
+      const typing = (e.target as HTMLElement)?.tagName === "INPUT";
+      if (e.key === "Escape") next();
+      else if (e.key === "/" && !typing) {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [next, registerCode]);
 
   async function sendWhatsApp() {
     if (outcome?.kind !== "result") return;
@@ -139,122 +164,108 @@ export default function ScanPage() {
     }
   }
 
-  const scannerPaused = Boolean(outcome) || busy || manualOpen || registerCode !== null;
+  function toggleFullscreen() {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void hubRef.current?.requestFullscreen?.().catch(() => toast("المتصفح لا يدعم وضع ملء الشاشة", "warning"));
+  }
+
+  const scannerPaused = Boolean(outcome) || busy || registerCode !== null;
 
   return (
-    <>
-      <PageHeader
-        title="تسجيل الحضور"
-        subtitle="كل كارت مرتبط بطالب ومادة — امسح الكارت ليتم تسجيل حضور المادة فوراً"
-        actions={
-          <button className="btn-dark" onClick={() => setManualOpen(true)}>
-            <UserCheck className="h-4 w-4" /> حضور يدوي
-          </button>
-        }
-      />
-
-      <div className="card mb-5 flex flex-wrap items-center gap-3 p-4">
-        <span className="flex items-center gap-2 rounded-xl bg-surface px-3 py-2 text-sm font-bold">
-          <Users className="h-4 w-4 text-ink-muted" />
-          حضور اليوم (كل المواد):
-          <span className="text-lg font-black text-brand">{presentToday?.toLocaleString("ar-EG") ?? "…"}</span>
+    <div ref={hubRef} className={clsx(fullscreen && "overflow-y-auto bg-surface p-4 sm:p-6")}>
+      {/* Header: title + live counters + controls */}
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <div className="me-auto">
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">مركز المسح</h1>
+          <p className="mt-0.5 hidden text-sm text-ink-muted sm:block">امسح كارت المادة بالكاميرا أو بقارئ الباركود — بدون أي ضغطات</p>
+        </div>
+        <span className="chip border-surface-line bg-white text-ink-soft">
+          <Users className="h-3.5 w-3.5" /> حضور اليوم
+          <span className="text-sm font-bold text-ink">{presentToday?.toLocaleString("ar-EG") ?? "—"}</span>
         </span>
         {!sync.online && (
-          <span className="flex items-center gap-2 rounded-xl bg-unpaid-soft px-3 py-2 text-sm font-bold text-unpaid">
-            <CloudOff className="h-4 w-4" /> وضع بدون إنترنت — المسح يعمل والحفظ محلي
+          <span className="chip border-unpaid-line bg-unpaid-soft text-unpaid">
+            <CloudOff className="h-3.5 w-3.5" /> وضع عدم الاتصال · المسح مستمر
           </span>
         )}
-        {sync.snapshotAt && (
-          <span className="text-xs text-ink-muted">
-            بيانات الجهاز محدثة: {new Date(sync.snapshotAt).toLocaleTimeString("ar-EG", { hour: "numeric", minute: "2-digit" })}
-          </span>
-        )}
-        <label className="ms-auto flex cursor-pointer items-center gap-2 text-sm font-semibold text-ink-soft">
+        <label className="btn-secondary btn-sm cursor-pointer">
           <input
             type="checkbox"
-            className="h-4 w-4 accent-brand"
+            className="h-3.5 w-3.5 accent-brand"
             checked={autoNext}
             onChange={(e) => {
               setAutoNext(e.target.checked);
               localStorage.setItem(LS_AUTONEXT, e.target.checked ? "1" : "0");
             }}
           />
-          <Timer className="h-4 w-4" /> مسح تلقائي متتالي
+          <Timer className="h-3.5 w-3.5" /> تقدم تلقائي
         </label>
+        <button className="btn-secondary btn-sm hidden sm:inline-flex" onClick={toggleFullscreen}>
+          {fullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          {fullscreen ? "خروج" : "ملء الشاشة"}
+        </button>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,420px)_1fr]">
+      {/* Quick manual check-in — always visible */}
+      <div className="mb-5">
+        <QuickCheckIn ref={searchRef} onCheckIn={checkIn} onCode={scanCode} busyId={busyEnrollment} snapshotAt={sync.snapshotAt} />
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,26rem)_1fr]">
+        {/* Camera */}
         <section className="space-y-3">
           <div className="relative">
-            <QrScanner onScan={submitCode} paused={scannerPaused} />
+            <QrScanner onScan={scanCode} paused={scannerPaused} className="shadow-card" />
             {busy && (
-              <div className="absolute inset-0 grid place-items-center rounded-2xl bg-ink/40">
-                <Loader2 className="h-10 w-10 animate-spin text-white" />
+              <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden rounded-b-xl bg-white/10">
+                <div className="h-full w-full animate-pulse bg-brand-400" />
               </div>
             )}
           </div>
-
-          {/* Typed code / USB-Bluetooth scanner (keyboard wedge) */}
-          <form
-            className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              submitCode(typed);
-              setTyped("");
-            }}
-          >
-            <div className="relative flex-1">
-              <Keyboard className="pointer-events-none absolute start-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-muted" />
-              <input
-                ref={codeInput}
-                autoFocus
-                className="input ps-11 font-mono uppercase"
-                placeholder="امسح بقارئ USB أو اكتب الكود"
-                value={typed}
-                onChange={(e) => setTyped(e.target.value)}
-                aria-label="إدخال كود الكارت يدوياً"
-                autoComplete="off"
-              />
-            </div>
-            <button className="btn-ghost" disabled={!typed.trim() || busy}>تسجيل</button>
-          </form>
+          <p className="hidden items-center gap-2 rounded-lg border border-dashed border-surface-strong px-3 py-2 text-xs text-ink-muted sm:flex">
+            <Usb className="h-3.5 w-3.5 shrink-0" />
+            قارئ الباركود جاهز في أي وقت · <kbd className="kbd">/</kbd> للبحث · <kbd className="kbd">Esc</kbd> للمسح التالي
+          </p>
         </section>
 
-        <section aria-live="assertive">
-          {/* No exit-animation gating: a new result must replace the old one instantly, even mid-animation */}
-            {outcome ? (
-              <div key={outcomeKey}>
-                <ScanResultCard
-                  outcome={outcome}
-                  online={sync.online}
-                  onNext={next}
-                  onWhatsApp={sendWhatsApp}
-                  onManual={() => setManualOpen(true)}
-                  onBindUnknown={(code) => setRegisterCode(code)}
-                  sending={sending}
-                  sent={sent}
-                />
+        {/* Result + session feed */}
+        <section className="min-w-0 space-y-5">
+          {outcome ? (
+            <ScanResultCard
+              key={outcomeKey}
+              outcome={outcome}
+              online={sync.online}
+              onNext={next}
+              onWhatsApp={sendWhatsApp}
+              onBindUnknown={(code) => setRegisterCode(code)}
+              sending={sending}
+              sent={sent}
+            />
+          ) : (
+            <div className="card grid min-h-[18rem] place-items-center border-dashed p-10 text-center">
+              <div>
+                <span className="mx-auto grid h-14 w-14 place-items-center rounded-xl bg-ink text-white">
+                  <ScanLine className="h-6 w-6" />
+                </span>
+                <p className="mt-4 text-lg font-semibold">جاهز للمسح</p>
+                <p className="mt-1 text-sm text-ink-muted">ستظهر هنا حالة الطالب واشتراكه فوراً</p>
               </div>
-            ) : (
-              <motion.div
-                key="idle"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="card grid min-h-80 place-items-center p-10 text-center"
-              >
-                <div>
-                  <span className="mx-auto grid h-20 w-20 place-items-center rounded-3xl bg-brand-50 text-brand">
-                    <ScanLine className="h-10 w-10" />
-                  </span>
-                  <p className="mt-5 text-xl font-black">جاهز للمسح</p>
-                  <p className="mt-1 text-sm text-ink-muted">قرّب كارت المادة من الكاميرا</p>
-                </div>
-              </motion.div>
-            )}
+            </div>
+          )}
+
+          {log.length > 0 && (
+            <div className="card">
+              <div className="card-header">
+                <p className="card-title">آخر عمليات المسح</p>
+                <button className="text-xs font-medium text-ink-muted hover:text-ink" onClick={() => setLog([])}>مسح القائمة</button>
+              </div>
+              <ul className="divide-y divide-surface-line">
+                {log.map((l) => <LogRow key={l.key} l={l} />)}
+              </ul>
+            </div>
+          )}
         </section>
       </div>
-
-      <ManualAttendanceDialog open={manualOpen} onClose={() => setManualOpen(false)} onPick={manualMark} busyId={manualBusyId} />
 
       <StudentFormModal
         open={registerCode !== null}
@@ -263,11 +274,46 @@ export default function ScanPage() {
           const code = registerCode;
           next();
           void syncEngine.refreshSnapshot();
-          if (code) void submitCode(code); // log attendance right away with the newly bound card
+          if (code) scanCode(code); // log attendance right away with the newly bound card
         }}
         groups={groups}
         initialCardCode={registerCode ?? undefined}
       />
-    </>
+    </div>
+  );
+}
+
+let logSeq = 0;
+function toLog(o: ScanOutcome): LogEntry {
+  const time = new Date().toLocaleTimeString("ar-EG", { hour: "numeric", minute: "2-digit" });
+  if (o.kind === "result") {
+    const r = o.data;
+    return { key: ++logSeq, kind: r.payment.status, title: r.student.fullName, sub: r.group.subject, time, offline: r.offline, repeat: r.alreadyMarked };
+  }
+  if (o.kind === "unverified") return { key: ++logSeq, kind: "unverified", title: o.cardCode, sub: "بانتظار التحقق", time, offline: true, repeat: false };
+  return { key: ++logSeq, kind: "error", title: o.cardCode ?? "مرفوض", sub: o.message, time, offline: false, repeat: false };
+}
+
+const LOG_ICON = {
+  PAID: { icon: CheckCircle2, cls: "text-paid" },
+  PENDING: { icon: AlertTriangle, cls: "text-pending" },
+  UNPAID: { icon: XCircle, cls: "text-unpaid" },
+  unverified: { icon: HelpCircle, cls: "text-pending" },
+  error: { icon: XCircle, cls: "text-ink-muted" },
+} as const;
+
+function LogRow({ l }: { l: LogEntry }) {
+  const { icon: Icon, cls } = LOG_ICON[l.kind];
+  return (
+    <li className="flex items-center gap-3 px-5 py-2.5 text-sm">
+      <Icon className={clsx("h-4 w-4 shrink-0", cls)} />
+      <span className="min-w-0 flex-1 truncate">
+        <span className="font-medium text-ink">{l.title}</span>
+        <span className="text-ink-muted"> · {l.sub}</span>
+      </span>
+      {l.repeat && <span className="text-2xs text-ink-muted">مكرر</span>}
+      {l.offline && <CloudOff className="h-3.5 w-3.5 text-ink-faint" aria-label="محفوظ على الجهاز" />}
+      <span className="shrink-0 text-xs text-ink-faint">{l.time}</span>
+    </li>
   );
 }

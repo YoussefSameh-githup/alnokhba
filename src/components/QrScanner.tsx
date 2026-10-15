@@ -99,44 +99,42 @@ export function QrScanner({
   }, [elementId]);
 
   return (
-    <div className={clsx("relative aspect-square w-full overflow-hidden rounded-2xl bg-ink", className)}>
+    <div className={clsx("relative aspect-square w-full overflow-hidden rounded-xl bg-ink-deep", className)}>
       <div id={elementId} className="absolute inset-0 [&_video]:h-full [&_video]:w-full [&_video]:object-cover" />
 
       {/* Scan-grid overlay */}
       {state === "ready" && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
-          <div className="relative h-[72%] w-[72%]">
+          <div className="relative h-[70%] w-[70%]">
             {[
-              "top-0 start-0 border-t-4 border-s-4 rounded-ss-2xl",
-              "top-0 end-0 border-t-4 border-e-4 rounded-se-2xl",
-              "bottom-0 start-0 border-b-4 border-s-4 rounded-es-2xl",
-              "bottom-0 end-0 border-b-4 border-e-4 rounded-ee-2xl",
+              "top-0 start-0 border-t-[3px] border-s-[3px] rounded-ss-xl",
+              "top-0 end-0 border-t-[3px] border-e-[3px] rounded-se-xl",
+              "bottom-0 start-0 border-b-[3px] border-s-[3px] rounded-es-xl",
+              "bottom-0 end-0 border-b-[3px] border-e-[3px] rounded-ee-xl",
             ].map((c) => (
-              <span key={c} className={clsx("absolute h-10 w-10 border-brand", c)} />
+              <span key={c} className={clsx("absolute h-8 w-8 transition-colors", paused ? "border-white/40" : "border-white", c)} />
             ))}
-            {!paused && (
-              <span className="absolute inset-x-3 h-0.5 animate-scanline rounded-full bg-brand shadow-[0_0_14px_3px_rgba(229,35,40,0.7)]" />
-            )}
+            {!paused && <span className="absolute inset-x-4 h-px animate-scanline bg-gradient-to-l from-transparent via-brand-400 to-transparent shadow-[0_0_12px_2px_rgba(248,113,113,0.6)]" />}
           </div>
         </div>
       )}
 
-      {paused && state === "ready" && <div className="absolute inset-0 bg-ink/60 backdrop-blur-[2px]" />}
+      {paused && state === "ready" && <div className="absolute inset-0 bg-ink-deep/55 backdrop-blur-[1px]" />}
 
       {state === "loading" && (
-        <div className="absolute inset-0 grid place-items-center text-white/80">
+        <div className="absolute inset-0 grid place-items-center text-white/70">
           <div className="flex flex-col items-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <p className="text-sm font-semibold">جاري تشغيل الكاميرا…</p>
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <p className="text-sm font-medium">جاري تشغيل الكاميرا…</p>
           </div>
         </div>
       )}
       {state === "error" && (
         <div className="absolute inset-0 grid place-items-center p-6 text-center text-white">
-          <div className="flex flex-col items-center gap-3">
-            <CameraOff className="h-10 w-10 text-brand-300" />
-            <p className="font-bold">{error}</p>
-            <p className="text-xs text-white/60">يمكنك إدخال كود الكارت يدوياً أو استخدام قارئ باركود USB</p>
+          <div className="flex max-w-xs flex-col items-center gap-3">
+            <span className="grid h-11 w-11 place-items-center rounded-xl bg-white/10"><CameraOff className="h-5 w-5 text-white/80" /></span>
+            <p className="text-sm font-semibold">{error}</p>
+            <p className="text-xs leading-relaxed text-white/55">قارئ الباركود (USB) والبحث اليدوي يعملان بدون كاميرا</p>
           </div>
         </div>
       )}
