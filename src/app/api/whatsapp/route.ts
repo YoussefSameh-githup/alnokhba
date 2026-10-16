@@ -7,8 +7,8 @@ import { sendAndLog } from "@/lib/whatsapp";
 import { normalizePhone } from "@/lib/phone";
 
 const body = z.object({
-  studentId: z.string().min(1),
-  attendanceId: z.string().optional(),
+  studentId: z.string().min(1).max(64),
+  attendanceId: z.string().max(64).optional(),
   message: z.string().min(1).max(1000),
   /** "api" = send through the gateway, "manual" = admin opened a wa.me link (just log it) */
   mode: z.enum(["api", "manual"]).default("api"),
@@ -29,5 +29,7 @@ export const POST = handle(async (req: Request) => {
 
   if (settings.provider === "NONE") return jsonError("فعّل بوابة واتساب من الإعدادات أو استخدم الإرسال اليدوي", 400, "NO_PROVIDER");
   const res = await sendAndLog(settings, { studentId, attendanceId, phone: student.parentWhatsapp, message });
-  return res.ok ? NextResponse.json({ ok: true }) : jsonError(`فشل الإرسال: ${res.error}`, 502, "GATEWAY");
+  if (res.ok) return NextResponse.json({ ok: true });
+  console.error("WhatsApp gateway error:", res.error); // details stay in server logs (+ Notification row)
+  return jsonError("فشل الإرسال عبر بوابة واتساب — راجع بيانات البوابة في الإعدادات", 502, "GATEWAY");
 });

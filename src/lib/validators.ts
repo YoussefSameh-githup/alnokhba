@@ -10,12 +10,15 @@ const phone = (label: string) =>
     .transform(normalizePhone);
 
 const paymentStatus = z.enum(["PAID", "UNPAID", "PENDING"]);
+/** Database ids (cuid) — bounded so oversized input never reaches a query */
+const id = z.string().trim().min(1).max(64);
+const text = (label: string, max: number) => z.string().trim().min(2, `${label} مطلوب`).max(max, `${label} طويل جداً`);
 
 /** One subject the student attends, with its own pre-printed card. */
 export const enrollmentInputSchema = z.object({
-  id: z.string().optional(), // present = existing enrollment
-  groupId: z.string().min(1, "اختر المادة/المجموعة"),
-  cardCode: z.string().trim().optional(), // blank = keep current card (or none yet)
+  id: id.optional(), // present = existing enrollment
+  groupId: z.string().trim().min(1, "اختر المادة/المجموعة").max(64),
+  cardCode: z.string().trim().max(64).optional(), // blank = keep current card (or none yet)
   paymentStatus: paymentStatus.default("UNPAID"),
 });
 
@@ -37,24 +40,25 @@ export const studentSaveSchema = z
 export type StudentSaveInput = z.infer<typeof studentSaveSchema>;
 
 export const groupSchema = z.object({
-  name: z.string().trim().min(2, "اسم المجموعة مطلوب"),
-  subject: z.string().trim().min(2, "المادة مطلوبة"),
-  grade: z.string().trim().min(2, "الصف مطلوب"),
-  monthlyFee: z.coerce.number().int().min(0),
+  name: text("اسم المجموعة", 120),
+  subject: text("المادة", 80),
+  grade: text("الصف", 80),
+  monthlyFee: z.coerce.number().int().min(0).max(1_000_000),
   sessionsPerMonth: z.coerce.number().int().min(1).max(31),
   active: z.boolean().optional(),
 });
 
 export const settingsSchema = z.object({
-  centerName: z.string().trim().min(2),
+  centerName: z.string().trim().min(2).max(120),
   provider: z.enum(["NONE", "GREEN_API", "ULTRAMSG", "TWILIO"]),
   autoSend: z.boolean(),
-  apiUrl: z.string().trim().url("رابط API غير صالح").optional().or(z.literal("")),
-  instanceId: z.string().trim().optional(),
-  apiToken: z.string().trim().optional(), // blank or masked → keep existing
-  senderNumber: z.string().trim().optional(),
-  attendanceTemplate: z.string().trim().min(10, "القالب قصير جداً"),
-  unpaidNotice: z.string().trim().min(10, "القالب قصير جداً"),
+  // HTTPS only: the gateway token travels in this URL
+  apiUrl: z.string().trim().max(200).url("رابط API غير صالح").startsWith("https://", "رابط API يجب أن يبدأ بـ https://").optional().or(z.literal("")),
+  instanceId: z.string().trim().max(200).optional(),
+  apiToken: z.string().trim().max(500).optional(), // blank or masked → keep existing
+  senderNumber: z.string().trim().max(32).optional(),
+  attendanceTemplate: z.string().trim().min(10, "القالب قصير جداً").max(1000, "القالب طويل جداً"),
+  unpaidNotice: z.string().trim().min(10, "القالب قصير جداً").max(1000, "القالب طويل جداً"),
 });
 
 /** Scan request: by card payload (camera/USB) or by enrollment (manual attendance). */
@@ -62,7 +66,7 @@ export const scanInputSchema = z
   .object({
     clientId: z.string().uuid().optional(),
     code: z.string().trim().min(1).max(64).optional(),
-    enrollmentId: z.string().min(1).optional(),
+    enrollmentId: id.optional(),
     method: z.enum(["SCAN", "MANUAL"]).default("SCAN"),
     scannedAt: z.string().datetime().optional(),
   })

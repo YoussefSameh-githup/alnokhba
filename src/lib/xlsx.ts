@@ -57,7 +57,7 @@ export function xlsxResponse(buf: Buffer, filename: string): Response {
   return new Response(new Uint8Array(buf), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": `attachment; filename="${filename.replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 120)}"`,
       "Cache-Control": "no-store",
     },
   });

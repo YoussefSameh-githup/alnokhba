@@ -1,3 +1,4 @@
+import "server-only"; // build fails if this (and DATABASE_URL) ever reaches a client bundle
 import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };

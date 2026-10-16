@@ -13,7 +13,7 @@ type Ctx = { params: Promise<{ id: string }> };
  */
 export const POST = handle(async (req: Request, { params }: Ctx) => {
   const { id } = await params;
-  const { code } = z.object({ code: z.string().min(1, "امسح الكارت الجديد") }).parse(await req.json());
+  const { code } = z.object({ code: z.string().trim().min(1, "امسح الكارت الجديد").max(64) }).parse(await req.json());
   const card = await prisma.$transaction(async (tx) => {
     await tx.enrollment.findUniqueOrThrow({ where: { id, active: true } });
     return bindCard(id, code, tx);

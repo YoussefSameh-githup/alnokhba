@@ -6,9 +6,12 @@ import { normalizeCode } from "./cards";
  *  - `q` matches name, student/parent phone, ANY active card code, or an enrolled subject/group name
  *  - `groupId` / `payment` match students having at least one such active subject this month
  */
+const MAX_Q = 100;
+const safeId = (v: string | null) => (v && v.length <= 64 ? v : null);
+
 export function buildStudentWhere(sp: URLSearchParams, month: string): Prisma.StudentWhereInput {
-  const q = sp.get("q")?.trim() ?? "";
-  const groupId = sp.get("groupId");
+  const q = sp.get("q")?.trim().slice(0, MAX_Q) ?? "";
+  const groupId = safeId(sp.get("groupId"));
   const payment = sp.get("payment");
   const digits = q.replace(/[^\d]/g, "").replace(/^0/, "");
 
@@ -50,8 +53,8 @@ export function paymentFilter(payment: string | null, month: string): Prisma.Enr
 
 /** Enrollment-level filter for the payments ledger and its export: ?month=&status=&groupId=&q= */
 export function buildEnrollmentWhere(sp: URLSearchParams, month: string): Prisma.EnrollmentWhereInput {
-  const q = sp.get("q")?.trim() ?? "";
-  const groupId = sp.get("groupId");
+  const q = sp.get("q")?.trim().slice(0, MAX_Q) ?? "";
+  const groupId = safeId(sp.get("groupId"));
   const digits = q.replace(/[^\d]/g, "").replace(/^0/, "");
   return {
     active: true,
